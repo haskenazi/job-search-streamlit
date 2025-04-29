@@ -1,16 +1,4 @@
-<<<<<<< HEAD
-import streamlit as st
-st.set_page_config(
-    page_title="Job Search Tool",
-    page_icon="🧭",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-import pandas as pd
-=======
 import os
->>>>>>> d88b3d1 (Final version ready for deployment)
 import requests
 import pandas as pd
 from openpyxl import load_workbook
@@ -19,7 +7,7 @@ import feedparser
 import io
 
 st.set_page_config(
-    page_title="Sales Companion App",
+    page_title="Job Search Tool",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -27,19 +15,6 @@ st.set_page_config(
 
 st.title("🔍 Job Search + News Insights")
 
-<<<<<<< HEAD
-# --- UI FORM ---
-st.title("Harry's Job Search Lead Tool")
-st.markdown("Fill out the fields below to search for job postings to find leads. LIMIT TO 5 RESULTS DURING BETA")
-
-with st.form("job_search_form"):
-    company = st.text_input("Company Name")
-    title = st.text_input("Job Title")
-    industry = st.text_input("Industry")
-    city = st.text_input("City")
-    max_results = st.slider("Max number of job results", 1, 50, 10)
-    submit = st.form_submit_button("Search")
-=======
 # === FORM INPUTS (in narrower columns) ===
 with st.container():
     col1, col2 = st.columns([2, 1])
@@ -53,7 +28,6 @@ with st.container():
             max_results = st.slider("Max number of job results", 1, 50, 10)
             use_mock_data = st.checkbox("Use mock data (no API calls)")
             submit = st.form_submit_button("Search")
->>>>>>> d88b3d1 (Final version ready for deployment)
 
 # === PROCESSING ===
 if submit:
@@ -66,15 +40,14 @@ if submit:
         for t in titles or [""]:
             queries.append(" ".join(filter(None, [t, c])))
 
-    # === NEWS SECTION (with expandable container) ===
+    # === NEWS SECTION ===
     if generate_news and companies:
-        with st.expander("📰 View News Articles", expanded=True):
-            for comp in companies:
-                st.markdown(f"#### 🔍 Top News About {comp}")
-                rss_url = f"https://news.google.com/rss/search?q={comp.replace(' ', '+')}"
-                feed = feedparser.parse(rss_url)
-                for entry in feed.entries[:5]:
-                    st.markdown(f"- [{entry.title}]({entry.link})")
+        for comp in companies:
+            st.subheader(f"📰 Top News About {comp}")
+            rss_url = f"https://news.google.com/rss/search?q={comp.replace(' ', '+')}"
+            feed = feedparser.parse(rss_url)
+            for entry in feed.entries[:5]:
+                st.markdown(f"- [{entry.title}]({entry.link})")
 
     # === JOB SEARCH SECTION ===
     all_rows = []
