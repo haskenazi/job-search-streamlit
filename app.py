@@ -20,8 +20,8 @@ headers = {
 }
 
 # --- UI FORM ---
-st.title("Job Search Tool (Powered by JSearch)")
-st.markdown("Fill out the fields below to search for job postings.")
+st.title("Harry's Job Search Lead Tool")
+st.markdown("Fill out the fields below to search for job postings to find leads. LIMIT TO 5 RESULTS DURING BETA")
 
 with st.form("job_search_form"):
     company = st.text_input("Company Name")
