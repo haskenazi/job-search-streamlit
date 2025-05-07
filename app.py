@@ -10,7 +10,7 @@ import docx2txt
 import PyPDF2
 
 st.set_page_config(
-    page_title="Sales Enablement Suite",
+    page_title="Sales Enablement Suites",
     page_icon="💼",
     layout="wide",
     initial_sidebar_state="expanded",
