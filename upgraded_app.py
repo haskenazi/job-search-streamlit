@@ -5,6 +5,10 @@ from openpyxl import load_workbook
 import streamlit as st
 import feedparser
 import io
+import datetime
+import openai
+import docx2txt
+import PyPDF2
 
 st.set_page_config(
     page_title="Sales Enablement Suite",
@@ -13,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# === SIMPLE USER AUTH ===
+# === SIMPLE LOGIN (REPLACE FOR PROD) ===
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -33,11 +37,9 @@ if not st.session_state.logged_in:
 
 # === MAIN APP ===
 st.title("💼 Sales Enablement Suite")
+tab1, tab2, tab3 = st.tabs(["Job Search + News", "Company Insights", "File Upload & Summary"])
 
-# === TABS ===
-tab1, tab2 = st.tabs(["Job Search + News", "Company Insights"])
-
-# === JOB SEARCH + NEWS TAB ===
+# === TAB 1: JOB SEARCH ===
 with tab1:
     with st.container():
         col1, col2 = st.columns([2, 1])
@@ -52,15 +54,14 @@ with tab1:
                 use_mock_data = st.checkbox("Use mock data (no API calls)")
                 submit = st.form_submit_button("Search")
 
-    if submit:
+                if submit and not (company or title or industry):
+                    st.warning("Please enter at least one search input.")
+
+    if submit and (company or title or industry):
         companies = [c.strip() for c in company.split(",") if c.strip()]
         titles = [t.strip() for t in title.split(",") if t.strip()]
         industries = [i.strip() for i in industry.split(",") if i.strip()]
-
-        queries = []
-        for c in companies or [""]:
-            for t in titles or [""]:
-                queries.append(" ".join(filter(None, [t, c])))
+        queries = [" ".join(filter(None, [t, c])) for c in companies or [""] for t in titles or [""]]
 
         if generate_news and companies:
             with st.expander("📰 View News Articles", expanded=True):
@@ -96,7 +97,7 @@ with tab1:
                 }
             else:
                 headers = {
-                    "X-RapidAPI-Key": "23428cd089msh050d7a2a05dd217p106bd6jsn4eb35fc7fe14",
+                    "X-RapidAPI-Key": "YOUR_RAPIDAPI_KEY",
                     "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
                 }
                 params = {
@@ -105,36 +106,27 @@ with tab1:
                     "industry": industries[0] if industries else None,
                     "location": city if city else None
                 }
-                params = {k: v for k, v in params.items() if v is not None}
-
                 try:
-                    response = requests.get("https://jsearch.p.rapidapi.com/search", headers=headers, params=params)
-                    response.raise_for_status()
+                    response = requests.get("https://jsearch.p.rapidapi.com/search", headers=headers, params={k: v for k, v in params.items() if v})
                     data = response.json()
                 except Exception as e:
                     st.error(f"API error for query '{query}': {e}")
                     continue
 
-            jobs = data.get('data', [])[:max_results]
-            for job in jobs:
-                apply_link = job.get("job_apply_link", "")
-                row = {
+            for job in data.get("data", [])[:max_results]:
+                link = job.get("job_apply_link", "")
+                all_rows.append({
                     "Company": job.get("employer_name", ""),
                     "Job Title": job.get("job_title", ""),
-                    "Location": (job.get("job_city") or "") + (", " + (job.get("job_state") or "") if job.get("job_state") else ""),
-                    "Link to Apply": f"<a href='{apply_link}' target='_blank'><b style='color:blue'>link</b></a>" if apply_link else ""
-                }
-                all_rows.append(row)
+                    "Location": f"{job.get('job_city', '')}, {job.get('job_state', '')}".strip(", "),
+                    "Link to Apply": f"<a href='{link}' target='_blank'><b style='color:blue'>link</b></a>" if link else ""
+                })
 
-        if not all_rows:
-            st.warning("No job results found.")
-        else:
+        if all_rows:
             df = pd.DataFrame(all_rows)
-
             st.sidebar.header("🔎 Filter Results")
-            selected_company = st.sidebar.multiselect("Filter by Company", options=sorted(df["Company"].unique()), default=sorted(df["Company"].unique()))
-            selected_location = st.sidebar.multiselect("Filter by Location", options=sorted(df["Location"].unique()), default=sorted(df["Location"].unique()))
-
+            selected_company = st.sidebar.multiselect("Company", df["Company"].unique().tolist(), default=df["Company"].unique().tolist())
+            selected_location = st.sidebar.multiselect("Location", df["Location"].unique().tolist(), default=df["Location"].unique().tolist())
             filtered_df = df[df["Company"].isin(selected_company) & df["Location"].isin(selected_location)]
 
             st.success(f"Showing {len(filtered_df)} of {len(df)} job postings.")
@@ -142,12 +134,51 @@ with tab1:
             st.markdown(filtered_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
             buffer = io.BytesIO()
-            df_download = filtered_df.copy()
-            df_download["Link to Apply"] = df_download["Link to Apply"].str.extract(r'href=\'(.*?)\'')[0]
-            df_download.to_excel(buffer, index=False)
-            st.download_button("📥 Download Excel", buffer.getvalue(), file_name="job_results.xlsx")
+            df_export = filtered_df.copy()
+            df_export["Link to Apply"] = df_export["Link to Apply"].str.extract(r'href=\'(.*?)\'')[0]
+            df_export.to_excel(buffer, index=False)
 
-# === COMPANY INSIGHTS TAB ===
+            print(f"Download by {st.session_state.user_email} at {datetime.datetime.now()} ({len(df_export)} rows)")
+            st.download_button("📥 Download Excel", buffer.getvalue(), file_name="job_results.xlsx")
+        else:
+            st.warning("No job results found.")
+
+# === TAB 2: COMPANY INSIGHTS ===
 with tab2:
     st.markdown("### 🧠 Company Insights (Coming Soon)")
-    st.info("This section will include company funding, employee trends, tech stack, and competitive signals from Crunchbase or Clearbit.")
+    st.info("This section will include funding, hiring, tech stack insights via Crunchbase or Clearbit.")
+
+# === TAB 3: FILE UPLOAD & SUMMARY ===
+with tab3:
+    st.markdown("### 📎 Upload Files for Summary or Account Plan")
+    uploaded_file = st.file_uploader("Upload .txt, .pdf, or .docx", type=["txt", "pdf", "docx"])
+    openai.api_key = st.secrets["openai_api_key"] if "openai_api_key" in st.secrets else ""
+
+    def extract_text(file):
+        if file.name.endswith(".txt"):
+            return file.read().decode("utf-8", errors="ignore")
+        elif file.name.endswith(".pdf"):
+            pdf_reader = PyPDF2.PdfReader(file)
+            return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+        elif file.name.endswith(".docx"):
+            return docx2txt.process(file)
+        return ""
+
+    def generate(prompt):
+        return openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        ).choices[0].message["content"]
+
+    if uploaded_file and openai.api_key:
+        choice = st.radio("What do you want to generate?", ["Generate Summary", "Generate Account Plan"])
+        if st.button("Submit"):
+            with st.spinner("Generating..."):
+                content = extract_text(uploaded_file)
+                prompt = f"Summarize this:\n{content}" if choice == "Generate Summary" else f"Create an account plan based on this:\n{content}"
+                result = generate(prompt)
+                st.markdown("#### 🧾 Result:")
+                st.write(result)
+    elif uploaded_file:
+        st.error("No OpenAI key found. Add it in Streamlit Cloud → Settings → Secrets.")
