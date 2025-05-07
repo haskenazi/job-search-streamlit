@@ -1,8 +1,6 @@
 streamlit
-pandas
-requests
-openpyxl
-feedparser
-openai
 docx2txt
 PyPDF2
+pandas
+feedparser
+requests

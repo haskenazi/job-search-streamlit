@@ -1,3 +1,4 @@
+
 import os
 import io
 import datetime
@@ -5,12 +6,11 @@ import requests
 import pandas as pd
 import streamlit as st
 import feedparser
-import openai
 import docx2txt
 import PyPDF2
 
 st.set_page_config(
-    page_title="Sales Enablement Suites",
+    page_title="Sales Enablement Suite",
     page_icon="💼",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -21,7 +21,7 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("🔐 Sign Up / Login")
+    st.title("🔐 Sign Upss / Login")
     with st.form("login_form"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
@@ -108,7 +108,7 @@ with tab1:
 
             buffer = io.BytesIO()
             df_export = filtered_df.copy()
-            df_export["Link to Apply"] = df_export["Link to Apply"].str.extract(r'href=\'(.*?)\'')[0]
+            df_export["Link to Apply"] = df_export["Link to Apply"].str.extract(r"href='(.*?)'")[0]
             df_export.to_excel(buffer, index=False)
             st.download_button("📥 Download Excel", buffer.getvalue(), file_name="job_results.xlsx")
 
@@ -117,35 +117,44 @@ with tab2:
     st.markdown("### 🧠 Company Insights (Coming Soon)")
 
 # === FILE UPLOAD & SUMMARY TAB ===
+def extract_text(file):
+    if file.name.endswith(".txt"):
+        return file.read().decode("utf-8", errors="ignore")
+    elif file.name.endswith(".pdf"):
+        return "\n".join([page.extract_text() or "" for page in PyPDF2.PdfReader(file).pages])
+    elif file.name.endswith(".docx"):
+        return docx2txt.process(file)
+    return ""
+
+def summarize_with_openrouter(text, token):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",  # Required by OpenRouter
+        "X-Title": "Sales Enablement App"    # Optional but recommended
+    }
+    payload = {
+        "model": "mistralai/mistral-7b-instruct",  # CORRECT model name
+        "messages": [{"role": "user", "content": f"Summarize this:\n{text}"}],
+        "temperature": 0.3
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
 with tab3:
     st.markdown("### 📎 Upload Files for Summary or Account Plan")
     uploaded_file = st.file_uploader("Upload .txt, .pdf, or .docx", type=["txt", "pdf", "docx"])
-    if "openai_api_key" in st.secrets:
-        client = openai.OpenAI(api_key=st.secrets["openai_api_key"])
 
-        def extract_text(file):
-            if file.name.endswith(".txt"):
-                return file.read().decode("utf-8", errors="ignore")
-            elif file.name.endswith(".pdf"):
-                return "\n".join([page.extract_text() or "" for page in PyPDF2.PdfReader(file).pages])
-            elif file.name.endswith(".docx"):
-                return docx2txt.process(file)
-            return ""
-
-        def generate(prompt):
-            res = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3
-            )
-            return res.choices[0].message.content
-
-        if uploaded_file:
-            choice = st.radio("Choose Task", ["Generate Summary", "Generate Account Plan"])
-            if st.button("Submit"):
-                content = extract_text(uploaded_file)
-                prompt = f"Summarize this:\n{content}" if choice == "Generate Summary" else f"Create an account plan from this:\n{content}"
-                with st.spinner("Generating..."):
-                    st.write(generate(prompt))
-    else:
-        st.error("Missing OpenAI key. Add 'openai_api_key' to Streamlit Secrets.")
+    if uploaded_file:
+        choice = st.radio("Choose Task", ["Generate Summary", "Generate Account Plan"])
+        if st.button("Submit"):
+            content = extract_text(uploaded_file)
+            prompt = f"Summarize this:\n{content}" if choice == "Generate Summary" else f"Create an account plan from this:\n{content}"
+            with st.spinner("Generating via OpenRouter..."):
+                try:
+                    result = summarize_with_openrouter(prompt, st.secrets["openrouter_api_key"])
+                    st.write(result)
+                except Exception as e:
+                    st.error(f"Error: {e}")
