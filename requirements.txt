@@ -3,3 +3,6 @@ pandas
 requests
 openpyxl
 feedparser
+openai
+docx2txt
+PyPDF2
